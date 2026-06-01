@@ -84,7 +84,7 @@ export function ChatScreen({ navigation, route }: Props) {
         >
           <View style={styles.mediaBubbleIcon}>
             {item.type === 'image'
-              ? <Image size={28} color={colors.primary} strokeWidth={1.8} />
+              ? <ImageIcon size={28} color={colors.primary} strokeWidth={1.8} />
               : <Video size={28} color={colors.primary} strokeWidth={1.8} />
             }
           </View>

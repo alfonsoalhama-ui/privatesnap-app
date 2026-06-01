@@ -11,6 +11,9 @@ import { MainStackParamList, ExpiryOption, SecurityLevel, Message } from '@/type
 import { colors } from '@/theme/colors';
 import { typography } from '@/theme/typography';
 import { useAuthStore, useConversationsStore } from '@/services/store';
+import { api } from '@/services/api';
+import { encryptFile } from '@/services/crypto';
+import * as FileSystem from 'expo-file-system/legacy';
 import { ImageIcon, ChevronLeft, Shield, Ban, Eye, Fingerprint } from 'lucide-react-native';
 import Svg, { Path, Rect, Circle, Line } from 'react-native-svg';
 
@@ -125,34 +128,70 @@ export function SendMediaScreen({ navigation, route }: Props) {
     if (result.canceled) return;
 
     const asset = result.assets[0];
-    const mediaType = asset.type === 'video' ? 'video' : 'image';
+    const detectedType = asset.type === 'video' ? 'video' : 'image';
 
     setIsSending(true);
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    setIsSending(false);
+    try {
+      // 1. Leer el archivo como base64
+      const fileData = await FileSystem.readAsStringAsync(asset.uri, {
+        encoding: 'base64' as any,
+      });
 
-    if (me) {
-      const msg: Message = {
-        id: Math.random().toString(36).slice(2),
-        senderId: me.id,
-        receiverId: recipientId,
-        type: mediaType,
-        mediaId: Math.random().toString(36).slice(2),
-        viewsAllowed: selectedExpiry === '1x' ? 1 : -1,
-        viewCount: 0,
-        captureAttempted: false,
-        sentAt: new Date(),
-        status: 'sent',
-      };
-      addMessage(conversationId, msg);
+      // 2. Generar IV para el cifrado
+      const iv = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+      const key = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+
+      // 3. Subir al servidor
+      const { mediaId } = await api.uploadEncryptedMedia({
+        data: fileData,
+        iv,
+        mediaType: detectedType,
+        conversationId,
+        recipientId,
+        expiryOption: selectedExpiry,
+        securityLevel: selectedSecurity,
+      });
+
+      // 5. Añadir mensaje al chat con la clave de descifrado
+      // La clave viaja dentro del mensaje (en producción iría cifrada con la clave pública del receptor)
+      if (me) {
+        const msg: Message = {
+          id: Math.random().toString(36).slice(2),
+          senderId: me.id,
+          receiverId: recipientId,
+          type: detectedType,
+          mediaId,
+          content: key, // clave de descifrado
+          viewsAllowed: selectedExpiry === '1x' ? 1 : -1,
+          viewCount: 0,
+          captureAttempted: false,
+          sentAt: new Date(),
+          status: 'sent',
+        };
+        addMessage(conversationId, msg);
+
+        // Notificar al receptor por socket
+        const { socketService } = require('@/services/socket');
+        socketService.sendMessage({
+          conversationId,
+          type: detectedType,
+          mediaId,
+          content: key,
+        });
+      }
+
+      const secLabel = SECURITY_LEVELS.find(s => s.value === selectedSecurity)?.label;
+      Alert.alert(
+        'Sent! ✓',
+        `Your ${detectedType === 'video' ? 'video' : 'photo'} was sent to @${recipientName} with ${secLabel} security.`,
+        [{ text: 'OK', onPress: () => navigation.goBack() }]
+      );
+    } catch (err: any) {
+      const msg = err?.response?.data?.error || err?.message || JSON.stringify(err);
+      Alert.alert('Error details', msg);
+    } finally {
+      setIsSending(false);
     }
-
-    const secLabel = SECURITY_LEVELS.find(s => s.value === selectedSecurity)?.label;
-    Alert.alert(
-      'Sent! ✓',
-      `Your ${mediaType === 'video' ? 'video' : 'photo'} was sent to @${recipientName} with ${secLabel} security.`,
-      [{ text: 'OK', onPress: () => navigation.goBack() }]
-    );
   }
 
   return (

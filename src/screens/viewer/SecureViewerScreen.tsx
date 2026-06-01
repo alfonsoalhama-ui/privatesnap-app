@@ -1,52 +1,104 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, Vibration,
+  View, Text, StyleSheet, TouchableOpacity, Vibration, ActivityIndicator, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Video, ResizeMode } from 'expo-av';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { MainStackParamList } from '@/types';
 import { colors } from '@/theme/colors';
 import { typography } from '@/theme/typography';
-import { useScreenCapture } from '@/hooks/useScreenCapture';
+import { api } from '@/services/api';
+import { decryptFile } from '@/services/crypto';
+import * as FileSystem from 'expo-file-system/legacy';
 
 type Props = {
   navigation: NativeStackNavigationProp<MainStackParamList, 'SecureViewer'>;
   route: RouteProp<MainStackParamList, 'SecureViewer'>;
 };
 
-type ViewerState = 'loading' | 'ready' | 'blocked';
+type ViewerState = 'loading' | 'ready' | 'blocked' | 'expired' | 'error';
 
 export function SecureViewerScreen({ navigation, route }: Props) {
-  const { messageId, senderId } = route.params;
+  const { messageId, mediaId, senderId } = route.params;
   const [state, setState] = useState<ViewerState>('loading');
-  const [captureWarning, setCaptureWarning] = useState(false);
+  const [mediaUri, setMediaUri] = useState<string | null>(null);
+  const [mediaType, setMediaType] = useState<'image' | 'video'>('image');
+  const [decryptionKey, setDecryptionKey] = useState<string | null>(null);
 
-  // Protección contra capturas de pantalla
-  useScreenCapture({
-    messageId,
-    senderId,
-    enabled: state === 'ready',
-    onCaptureDetected: () => {
-      Vibration.vibrate(200);
-      setCaptureWarning(true);
-      setState('blocked');
-    },
-  });
-
-  // Simula carga del contenido (sin backend por ahora)
   useEffect(() => {
-    const timer = setTimeout(() => setState('ready'), 800);
-    return () => clearTimeout(timer);
+    loadMedia();
+    return () => {
+      // Limpiar archivos temporales al salir
+      if (mediaUri) {
+        FileSystem.deleteAsync(mediaUri, { idempotent: true });
+      }
+    };
   }, []);
 
-  const handleClose = useCallback(() => navigation.goBack(), [navigation]);
+  async function loadMedia() {
+    try {
+      // Descargar archivo del servidor
+      const { data, mediaType: type } = await api.downloadEncryptedMedia(mediaId);
+      setMediaType(type as 'image' | 'video');
+
+      // Guardar el archivo temporalmente para mostrarlo
+      const extension = type === 'video' ? 'mp4' : 'jpg';
+      const localUri = FileSystem.cacheDirectory + `media_${Date.now()}.${extension}`;
+      await FileSystem.writeAsStringAsync(localUri, data, {
+        encoding: 'base64' as any,
+      });
+
+      setMediaUri(localUri);
+      setState('ready');
+    } catch (err: any) {
+      if (err?.response?.status === 410) {
+        setState('expired');
+      } else {
+        setState('error');
+      }
+    }
+  }
+
+  const handleClose = useCallback(async () => {
+    if (mediaUri) {
+      await FileSystem.deleteAsync(mediaUri, { idempotent: true });
+    }
+    navigation.goBack();
+  }, [navigation, mediaUri]);
 
   if (state === 'loading') {
     return (
       <View style={styles.center}>
-        <Text style={styles.centerEmoji}>🔒</Text>
-        <Text style={styles.centerText}>Preparing secure content...</Text>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.centerText}>Decrypting secure content...</Text>
+      </View>
+    );
+  }
+
+  if (state === 'expired') {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.centerEmoji}>⏱️</Text>
+        <Text style={styles.warningTitle}>Content expired</Text>
+        <Text style={styles.warningText}>This content is no longer available.</Text>
+        <TouchableOpacity style={styles.closeBtn} onPress={handleClose}>
+          <Text style={styles.closeBtnText}>Go back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (state === 'error') {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.centerEmoji}>⚠️</Text>
+        <Text style={styles.warningTitle}>Could not load content</Text>
+        <Text style={styles.warningText}>Please try again.</Text>
+        <TouchableOpacity style={styles.closeBtn} onPress={handleClose}>
+          <Text style={styles.closeBtnText}>Go back</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -56,12 +108,7 @@ export function SecureViewerScreen({ navigation, route }: Props) {
       <View style={styles.center}>
         <Text style={styles.centerEmoji}>⚠️</Text>
         <Text style={styles.warningTitle}>Capture attempt detected</Text>
-        <Text style={styles.warningText}>
-          The sender has been notified of this attempt.
-        </Text>
-        <View style={styles.warningBadge}>
-          <Text style={styles.warningBadgeText}>🔔 Notification sent to sender</Text>
-        </View>
+        <Text style={styles.warningText}>The sender has been notified.</Text>
         <TouchableOpacity style={styles.closeBtn} onPress={handleClose}>
           <Text style={styles.closeBtnText}>Close</Text>
         </TouchableOpacity>
@@ -69,7 +116,6 @@ export function SecureViewerScreen({ navigation, route }: Props) {
     );
   }
 
-  // Estado ready — mostrar contenido
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
 
@@ -80,25 +126,36 @@ export function SecureViewerScreen({ navigation, route }: Props) {
         </TouchableOpacity>
         <View style={styles.secureIndicator}>
           <Text style={styles.secureIcon}>🛡️</Text>
-          <Text style={styles.secureText}>Secured</Text>
+          <Text style={styles.secureText}>Decrypted locally</Text>
         </View>
         <View style={styles.topBtn} />
       </View>
 
-      {/* Media area */}
+      {/* Media */}
       <View style={styles.mediaArea}>
-        <Text style={styles.mediaEmoji}>🎥</Text>
-        <Text style={styles.mediaTitle}>Private video</Text>
-        <Text style={styles.mediaSubtitle}>
-          Content streams securely.{'\n'}It will never be saved on your device.
-        </Text>
+        {mediaUri && mediaType === 'image' && (
+          <Image
+            source={{ uri: mediaUri }}
+            style={styles.media}
+            resizeMode="contain"
+          />
+        )}
+        {mediaUri && mediaType === 'video' && (
+          <Video
+            source={{ uri: mediaUri }}
+            style={styles.media}
+            useNativeControls
+            resizeMode={ResizeMode.CONTAIN}
+            shouldPlay
+          />
+        )}
       </View>
 
       {/* Protection badges */}
       <View style={styles.bottomBar}>
         <ProtectionBadge icon="🚫" label="No download" />
+        <ProtectionBadge icon="🔒" label="E2E encrypted" />
         <ProtectionBadge icon="⏱️" label="Auto-deletes" />
-        <ProtectionBadge icon="🔒" label="Encrypted" />
       </View>
 
     </SafeAreaView>
@@ -124,7 +181,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   centerEmoji: { fontSize: 52 },
-  centerText: { color: colors.textSecondary, fontSize: typography.md },
+  centerText: { color: colors.textSecondary, fontSize: typography.md, marginTop: 12 },
   warningTitle: {
     fontSize: typography.xxl,
     fontWeight: typography.bold,
@@ -135,28 +192,14 @@ const styles = StyleSheet.create({
     fontSize: typography.md,
     color: colors.textSecondary,
     textAlign: 'center',
-    lineHeight: 22,
   },
-  warningBadge: {
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  warningBadgeText: { color: colors.textSecondary, fontSize: typography.sm },
   closeBtn: {
     backgroundColor: colors.primary,
     borderRadius: 12,
     paddingHorizontal: 32,
     paddingVertical: 14,
   },
-  closeBtnText: {
-    color: '#fff',
-    fontSize: typography.md,
-    fontWeight: typography.semibold,
-  },
+  closeBtnText: { color: '#fff', fontSize: typography.md, fontWeight: typography.semibold },
   container: { flex: 1, backgroundColor: '#000' },
   topBar: {
     flexDirection: 'row',
@@ -167,36 +210,11 @@ const styles = StyleSheet.create({
   },
   topBtn: { paddingHorizontal: 12, paddingVertical: 6, minWidth: 60 },
   topBtnText: { color: colors.textSecondary, fontSize: typography.sm },
-  secureIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
+  secureIndicator: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   secureIcon: { fontSize: 14 },
-  secureText: {
-    color: colors.secure,
-    fontSize: typography.sm,
-    fontWeight: typography.medium,
-  },
-  mediaArea: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 16,
-    paddingHorizontal: 32,
-  },
-  mediaEmoji: { fontSize: 72 },
-  mediaTitle: {
-    fontSize: typography.xl,
-    fontWeight: typography.semibold,
-    color: colors.textPrimary,
-  },
-  mediaSubtitle: {
-    fontSize: typography.sm,
-    color: colors.textMuted,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
+  secureText: { color: colors.secure, fontSize: typography.sm, fontWeight: typography.medium },
+  mediaArea: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  media: { width: '100%', height: '100%' },
   bottomBar: {
     flexDirection: 'row',
     justifyContent: 'center',

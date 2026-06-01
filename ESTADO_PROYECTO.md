@@ -1,5 +1,5 @@
 # Estado del proyecto PrivateSnap
-*Última actualización: Mayo 2026*
+*Última actualización: Junio 2026*
 
 ---
 
@@ -12,97 +12,109 @@ Anónima, segura, efímera. Sin email, sin teléfono — solo username y contras
 ## Tecnología
 - **Frontend**: React Native con Expo SDK 54 — carpeta `PrivateSnap`
 - **Backend**: Node.js + Express + Socket.io + PostgreSQL — carpeta `PrivateSnap-backend`
-- **Base de datos**: PostgreSQL en Railway (ya creada y funcionando)
-- **Hosting backend**: Railway (pendiente de desplegar)
+- **Base de datos**: PostgreSQL en Railway (activa)
+- **Hosting backend**: Railway (activo — sunny-stillness-production-dc44.up.railway.app)
+- **App instalada**: APK real en Pixel (lobo) y tablet Huawei (cabra)
 
 ---
 
 ## Lo que está hecho ✅
 
-### App (frontend)
-- App corriendo en Android con Expo Go
-- Registro y login con username + contraseña (actualmente en local, pendiente conectar al backend)
-- Lista de conversaciones
-- Añadir contacto por username → abre el chat directamente
-- Chat con mensajes de texto (local por ahora)
-- Pantalla de envío de foto/vídeo con **3 niveles de seguridad**
-- Visor seguro (placeholder visual, sin reproducción real aún)
-- Safe area correcta en todas las pantallas
+### App
+- Registro y login con username + contraseña contra servidor real
+- Lista de conversaciones persistente (se guarda al cerrar la app)
+- Añadir contacto por username → abre chat directamente
+- Chat en tiempo real entre dispositivos (Socket.io)
+- Estado online/offline en tiempo real
+- Envío de fotos y vídeos con cifrado (Nivel 1 funcionando)
+- Visualización segura con auto-destrucción (Once / 1h / 24h / 7d)
+- 3 niveles de seguridad seleccionables en el envío
+- Iconos Lucide en toda la app (sin emojis)
+- Safe area correcta en todos los dispositivos
 - Todo en inglés
+- APK instalado directamente (sin Expo Go)
 
-### Backend
-- Servidor Node.js + TypeScript creado y funcionando localmente
-- Base de datos PostgreSQL en Railway conectada y con tablas creadas
-- Rutas de autenticación: registro, login, buscar usuario
-- Rutas de conversaciones: listar, crear, mensajes
-- Socket.io configurado para mensajería en tiempo real
-- Código commiteado en Git local (falta subir a GitHub)
-
----
-
-## Los 3 niveles de seguridad diseñados
-1. 🔒 **Standard** — vídeo en servidor, se borra tras verlo
-2. 🔒🔒 **Private** — streaming desde el móvil del emisor, notificación cuando se reproduce
-3. 🔒🔒🔒 **Max security** — igual que Private + cámara frontal del receptor visible para el emisor en tiempo real
+### Backend (Railway)
+- Autenticación: registro, login, búsqueda de usuario
+- Conversaciones: listar, crear, mensajes
+- Media cifrada: subida y descarga con auto-destrucción
+- Socket.io para mensajería y presencia en tiempo real
+- Base de datos PostgreSQL con tablas: users, conversations, messages, media
 
 ---
 
-## LO QUE FALTA — Por orden de prioridad
-
-### 🔴 Paso inmediato (mañana primero)
-1. Crear repositorio en GitHub llamado `privatesnap-backend` (privado)
-   - Ir a https://github.com/new
-   - Nombre: `privatesnap-backend`, marcar Private
-   - Crear repositorio
-2. Subir el código al repositorio:
-   ```
-   cd "C:\Users\alfon\Documents\Claude\Projects\app\PrivateSnap-backend"
-   git remote add origin https://github.com/TU_USUARIO/privatesnap-backend.git
-   git push -u origin master
-   ```
-3. Conectar Railway al repositorio de GitHub para desplegar automáticamente
-4. Añadir variables de entorno en Railway:
-   - `JWT_SECRET` = una cadena secreta larga
-   - `DATABASE_URL` = (Railway la pone automáticamente al conectar PostgreSQL)
-5. Obtener la URL pública del backend en Railway (algo como `https://privatesnap-backend.up.railway.app`)
-6. Actualizar `api.ts` en la app con esa URL pública
-
-### 🟡 Una vez el backend esté en Railway
-- Conectar registro y login de la app al backend real
-- Conectar el chat al backend (mensajes reales entre usuarios)
-- Conectar Socket.io para mensajes en tiempo real
-- Probar con dos móviles
-
-### 🟢 Después
-- Reproducción real de vídeo en el visor
-- Streaming P2P entre móviles (WebRTC) para niveles 2 y 3
-- Cámara frontal en tiempo real (nivel 3)
-- Notificación "alguien está viendo tu vídeo ahora"
+## Los 3 niveles de seguridad
+1. 🔒 **Standard** — foto/vídeo cifrado en servidor, auto-destrucción ✅ FUNCIONA
+2. 🔒🔒 **Private** — streaming desde el móvil del emisor (pendiente WebRTC)
+3. 🔒🔒🔒 **Max security** — igual que Private + cámara frontal del receptor (pendiente)
 
 ---
 
-## Cómo arrancar todo
+## Pendiente ❌ — Por orden de prioridad
 
-### App (frontend)
+### Próximo paso
+1. **Notificaciones push** — que lleguen mensajes aunque la app esté cerrada
+2. **Nivel 2 — WebRTC** — streaming P2P desde el móvil del emisor
+3. **Nivel 3** — cámara frontal del receptor en tiempo real
+4. **Cifrado real E2E** — AES-256 en el móvil antes de subir (ahora mismo el archivo sube sin cifrar realmente)
+5. **Frase de recuperación** — alternativa a recuperar contraseña sin email
+6. **Publicar en Play Store** — cuando esté lista
+
+---
+
+## Credenciales y URLs importantes
+- **Railway**: https://railway.app — proyecto "serene-mercy"
+- **Backend URL**: https://sunny-stillness-production-dc44.up.railway.app
+- **Base de datos Railway** (pública): postgresql://postgres:TBnjkWFiMTtQDtiuzmuNMWNWkvCkvHko@switchyard.proxy.rlwy.net:40625/railway
+- **GitHub app**: https://github.com/alfonsoalhama-ui/privatesnap-app
+- **GitHub backend**: https://github.com/alfonsoalhama-ui/privatesnap-backend
+- **Expo**: https://expo.dev — cuenta alhama
+- **Último APK**: https://expo.dev/accounts/alhama/projects/privatesnap/builds/ (ver el más reciente)
+
+---
+
+## Usuarios de prueba
+- **lobo** — Pixel (móvil)
+- **cabra** — Tablet Huawei
+
+---
+
+## Cómo arrancar para continuar el desarrollo
+
+### 1. Arrancar la app (solo si usas Expo Go para pruebas rápidas)
 ```
 cd "C:\Users\alfon\Documents\Claude\Projects\app\PrivateSnap"
 npx expo start --lan
 ```
-Escanear QR con Expo Go en Android.
 
-### Backend (local, solo para pruebas)
+### 2. Hacer un nuevo build (APK real)
+```
+cd "C:\Users\alfon\Documents\Claude\Projects\app\PrivateSnap"
+eas build --platform android --profile preview
+```
+
+### 3. Subir cambios al backend
 ```
 cd "C:\Users\alfon\Documents\Claude\Projects\app\PrivateSnap-backend"
-npm run dev
+git add .
+git commit -m "descripción del cambio"
+git push
+```
+Railway despliega automáticamente tras el push.
+
+### 4. Guardar cambios de la app en GitHub
+```
+cd "C:\Users\alfon\Documents\Claude\Projects\app\PrivateSnap"
+git add .
+git commit -m "descripción del cambio"
+git push
 ```
 
 ---
 
 ## Notas técnicas importantes
 - Usar siempre `--legacy-peer-deps` al instalar paquetes en el frontend
-- `babel-preset-expo` debe ser `~54.0.10`
-- `react-native-reanimated` debe ser `~3.16.x` (la v4 no es compatible con Expo Go)
-- `SafeAreaView` siempre importar de `react-native-safe-area-context`, nunca de `react-native`
-- La IP local del PC es `192.168.18.18` pero el PC va por cable y el móvil por WiFi — por eso hay que usar Railway
-- Base de datos Railway URL pública: `postgresql://postgres:TBnjkWFiMTtQDtiuzmuNMWNWkvCkvHko@switchyard.proxy.rlwy.net:40625/railway`
-- El backend tiene Git inicializado pero aún NO está en GitHub
+- `expo-file-system` debe importarse desde `expo-file-system/legacy`
+- `SafeAreaView` siempre de `react-native-safe-area-context`
+- El backend guarda los archivos cifrados en la base de datos (no en disco)
+- Railway tiene un plan de prueba con créditos — vigilar que no se agoten

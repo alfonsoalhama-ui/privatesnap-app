@@ -72,6 +72,26 @@ class ApiService {
     const res = await this.client.post(`/conversations/${conversationId}/messages`, { content });
     return res.data;
   }
+
+  // ─── Media cifrada ───────────────────────────────────────────────────────
+
+  async uploadEncryptedMedia(params: {
+    data: string;       // base64 del archivo cifrado
+    iv: string;         // vector de inicialización
+    mediaType: 'image' | 'video';
+    conversationId: string;
+    recipientId: string;
+    expiryOption: string;
+    securityLevel: number;
+  }) {
+    const res = await this.client.post('/media/upload', params);
+    return res.data as { mediaId: string };
+  }
+
+  async downloadEncryptedMedia(mediaId: string) {
+    const res = await this.client.get(`/media/${mediaId}`);
+    return res.data as { data: string; iv: string; mediaType: string };
+  }
 }
 
 export const api = new ApiService();

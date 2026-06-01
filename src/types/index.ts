@@ -80,7 +80,7 @@ export type MainTabParamList = {
 export type MainStackParamList = {
   Tabs: undefined;
   Chat: { conversationId: string; user: User };
-  SecureViewer: { messageId: string; mediaId: string; senderId: string };
+  SecureViewer: { messageId: string; mediaId: string; senderId: string; decryptionKey?: string };
   SendMedia: { recipientId: string; recipientName: string; conversationId: string; mediaType?: 'image' | 'video' };
   UserProfile: { userId: string };
 };
