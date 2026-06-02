@@ -1,0 +1,1207 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>InfielMap — El mapa de las infidelidades en España</title>
+  <meta name="description" content="El mapa en tiempo real de las infidelidades en España.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #181E2E;
+      --accent: #E0185C;
+      --accent-dark: #A8103F;
+      --text: #EDE9E0;
+      --muted: #6B7280;
+      --blue: #4A90D9;
+      --pink: #E0185C;
+      --panel-bg: #1E2438;
+      --border: rgba(237,233,224,0.1);
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Poppins', sans-serif;
+      overflow: hidden;
+    }
+
+    /* ── HEADER ── */
+    header {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 60px;
+      background: rgba(24,30,46,0.97);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      z-index: 1000;
+      backdrop-filter: blur(10px);
+    }
+
+    .logo-wrap { display: flex; align-items: center; gap: 13px; }
+
+    .logo-text {
+      font-family: 'Poppins', sans-serif;
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: 0;
+      line-height: 1;
+      user-select: none;
+    }
+    .logo-text .infiel { color: var(--text); }
+    .logo-text .mapword { color: var(--muted); font-weight: 600; }
+
+    .total-counter {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font-size: 12px;
+      color: var(--muted);
+      letter-spacing: 0;
+    }
+    #totalCounter {
+      font-family: 'Poppins', sans-serif;
+      font-size: 22px;
+      color: var(--accent);
+      font-weight: 700;
+      min-width: 64px;
+      text-align: right;
+      transition: color 0.4s;
+    }
+    #totalCounter.bump { color: #fff; }
+
+    /* ── AD BANNER ── */
+    .ad-banner {
+      position: fixed;
+      top: 60px;
+      left: 300px;
+      right: 0;
+      height: 90px;
+      background: rgba(24,30,46,0.95);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 998;
+    }
+    .ad-inner-728 {
+      width: 728px;
+      height: 90px;
+      border: 1px dashed rgba(237,233,224,0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font-size: 10px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    /* ── MAIN LAYOUT ── */
+    .app-layout {
+      position: fixed;
+      top: 60px;
+      left: 0; right: 0; bottom: 0;
+      display: flex;
+    }
+
+    /* ── LEFT PANEL ── */
+    .left-panel {
+      width: 300px;
+      height: 100%;
+      background: var(--panel-bg);
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      overflow-x: hidden;
+      flex-shrink: 0;
+      z-index: 500;
+      scrollbar-width: thin;
+      scrollbar-color: var(--muted) transparent;
+    }
+    .left-panel::-webkit-scrollbar { width: 3px; }
+    .left-panel::-webkit-scrollbar-thumb { background: var(--muted); border-radius: 2px; }
+
+    /* ── LIVE ALERT ── */
+    .live-alert {
+      margin: 14px 14px 0;
+      background: rgba(224,24,92,0.08);
+      border: 1px solid rgba(224,24,92,0.35);
+      border-radius: 8px;
+      padding: 13px 14px;
+    }
+    .live-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 9px;
+    }
+    .pulse-dot {
+      width: 8px; height: 8px;
+      background: var(--accent);
+      border-radius: 50%;
+      flex-shrink: 0;
+      animation: dotPulse 1.6s ease-in-out infinite;
+    }
+    @keyframes dotPulse {
+      0%,100% { opacity:1; box-shadow: 0 0 0 0 rgba(224,24,92,0.5); }
+      50% { opacity:0.75; box-shadow: 0 0 0 5px rgba(224,24,92,0); }
+    }
+    .live-label {
+      font-size: 9px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--accent);
+      font-weight: 700;
+    }
+    #liveAlertText {
+      font-family: 'Poppins', sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+      line-height: 1.55;
+      min-height: 46px;
+      transition: opacity 0.5s ease;
+    }
+
+    /* ── NOTIFY BUTTON ── */
+    #notifyBtn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 9px;
+      width: calc(100% - 28px);
+      margin: 14px;
+      padding: 13px 18px;
+      background: var(--accent);
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      font-family: 'Poppins', sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    #notifyBtn:hover {
+      background: var(--accent-dark);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(224,24,92,0.4);
+    }
+
+    /* ── STATS GRID ── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      padding: 0 14px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .stat-card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 11px 10px;
+      text-align: center;
+    }
+    .stat-label {
+      display: block;
+      font-size: 9px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 5px;
+    }
+    .stat-value {
+      font-family: 'Poppins', sans-serif;
+      font-size: 24px;
+      color: var(--accent);
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    /* ── SECTION TITLE ── */
+    .section-title {
+      font-size: 9px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 600;
+      padding: 14px 14px 10px;
+    }
+
+    /* ── RANKING ── */
+    .ranking-list { padding: 0 14px 14px; border-bottom: 1px solid var(--border); }
+    .ranking-item { margin-bottom: 11px; }
+    .ranking-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 4px;
+    }
+    .ranking-city { font-size: 13px; font-weight: 500; color: var(--text); }
+    .ranking-count {
+      font-family: 'Poppins', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .bar-bg {
+      height: 3px;
+      background: rgba(255,255,255,0.06);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 2px;
+      width: 0%;
+      transition: width 1.6s cubic-bezier(.4,0,.2,1);
+    }
+
+    /* ── LEGEND ── */
+    .legend { padding: 0 14px 14px; border-bottom: 1px solid var(--border); }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 7px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--muted);
+    }
+    .leg-line { width: 28px; height: 2px; border-radius: 1px; flex-shrink: 0; }
+    .leg-line.male { background: var(--blue); }
+    .leg-line.female { background: var(--pink); }
+    .leg-line.lgbtq {
+      background: linear-gradient(90deg,#FF0018,#FFA52C,#FFFF41,#008018,#0000F9,#86007D);
+    }
+
+    /* ── AD RECT ── */
+    .ad-rect-wrap { padding: 14px; }
+    .ad-inner-300 {
+      width: 100%;
+      height: 250px;
+      border: 1px dashed rgba(237,233,224,0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font-size: 10px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    /* ── MAP ── */
+    #map {
+      flex: 1;
+      margin-top: 90px;
+    }
+
+    /* ── LEAFLET OVERRIDES ── */
+    .leaflet-container { background: var(--bg); }
+    .leaflet-control-zoom a {
+      background: var(--panel-bg) !important;
+      color: var(--text) !important;
+      border-color: var(--border) !important;
+    }
+    .leaflet-control-attribution {
+      background: rgba(24,30,46,0.8) !important;
+      color: var(--muted) !important;
+      font-size: 9px !important;
+    }
+    .leaflet-control-attribution a { color: var(--muted) !important; }
+
+    /* ── ARROW ANIMATIONS ── */
+    @keyframes rainbowStroke {
+      0%   { stroke: #FF0018; }
+      16%  { stroke: #FFA52C; }
+      33%  { stroke: #FFFF41; }
+      50%  { stroke: #008018; }
+      66%  { stroke: #0000F9; }
+      83%  { stroke: #86007D; }
+      100% { stroke: #FF0018; }
+    }
+    .rainbow-arrow { animation: rainbowStroke 2.2s linear infinite; }
+
+    /* ── CITY DOT ── */
+    .city-dot {
+      width: 7px; height: 7px;
+      background: var(--accent);
+      border-radius: 50%;
+      border: 1px solid rgba(224,24,92,0.4);
+    }
+    @keyframes cityPulse {
+      0%   { box-shadow: 0 0 0 0 rgba(224,24,92,0.8); }
+      100% { box-shadow: 0 0 0 10px rgba(224,24,92,0); }
+    }
+    .city-dot.pulse { animation: cityPulse 0.9s ease-out; }
+
+    /* ── GENDER LABEL ── */
+    .gender-label {
+      font-size: 13px;
+      line-height: 1;
+      pointer-events: none;
+      filter: drop-shadow(0 1px 3px rgba(0,0,0,0.9));
+    }
+
+    /* ── MODAL ── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(24,30,46,0.85);
+      backdrop-filter: blur(8px);
+      z-index: 2000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+    .modal-overlay.active {
+      opacity: 1;
+      pointer-events: all;
+    }
+    .modal {
+      position: relative;
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 38px 36px 34px;
+      width: 420px;
+      max-width: 95vw;
+      transform: translateY(18px);
+      transition: transform 0.3s ease;
+    }
+    .modal-overlay.active .modal { transform: translateY(0); }
+
+    .modal-close {
+      position: absolute;
+      top: 14px; right: 18px;
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 18px;
+      cursor: pointer;
+      line-height: 1;
+      transition: color 0.2s;
+    }
+    .modal-close:hover { color: var(--text); }
+
+    .modal-logo { text-align: center; margin-bottom: 22px; }
+
+    .modal-title {
+      font-family: 'Poppins', sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+      text-align: center;
+      color: var(--text);
+      letter-spacing: 0;
+      margin-bottom: 26px;
+    }
+
+    .form-group { margin-bottom: 18px; }
+
+    .form-label {
+      display: block;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .gender-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 1fr;
+      gap: 6px;
+    }
+    .gender-btn {
+      padding: 9px 4px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--muted);
+      font-family: 'Poppins', sans-serif;
+      font-size: 10px;
+      font-weight: 500;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+    .gender-btn span { display: block; font-size: 15px; margin-bottom: 3px; }
+    .gender-btn:hover { border-color: var(--accent); color: var(--text); }
+    .gender-btn.selected {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(224,24,92,0.1);
+    }
+
+    select, input[type="email"] {
+      width: 100%;
+      padding: 10px 13px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: 'Poppins', sans-serif;
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.2s;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    select {
+      cursor: pointer;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236B7280'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      background-size: 10px 6px;
+      padding-right: 30px;
+    }
+    select option { background: #1E2438; color: var(--text); }
+    select:focus, input[type="email"]:focus { border-color: var(--accent); }
+
+    .field-error {
+      font-size: 10px;
+      color: #e05252;
+      margin-top: 5px;
+      display: none;
+    }
+
+    .submit-btn {
+      width: 100%;
+      padding: 13px;
+      margin-top: 6px;
+      background: var(--accent);
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      font-family: 'Poppins', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .submit-btn:hover { background: var(--accent-dark); box-shadow: 0 4px 16px rgba(224,24,92,0.4); }
+    .submit-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    /* ── TOAST ── */
+    .toast {
+      position: fixed;
+      bottom: 28px; right: 28px;
+      background: var(--panel-bg);
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      padding: 14px 22px;
+      font-family: 'Poppins', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--accent);
+      letter-spacing: 0;
+      z-index: 3000;
+      transform: translateY(16px);
+      opacity: 0;
+      transition: all 0.4s ease;
+      pointer-events: none;
+    }
+    .toast.show { transform: translateY(0); opacity: 1; }
+  </style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════
+     HEADER
+════════════════════════════════════════ -->
+<header>
+  <div class="logo-wrap">
+    <!-- Logo: pin de ubicación + lupa + corazón roto -->
+    <svg width="38" height="46" viewBox="0 0 44 54" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <!-- Pin body (relleno oscuro semitransparente) -->
+      <path d="M22 52 C22 52 2 36 2 21 C2 10.5 11 2 22 2 C33 2 42 10.5 42 21 C42 36 22 52 22 52Z"
+            fill="#1E2438" stroke="#EDE9E0" stroke-width="2.2"/>
+      <!-- Anillo exterior -->
+      <circle cx="22" cy="21" r="14" stroke="#EDE9E0" stroke-width="1" opacity="0.25"/>
+      <!-- Anillo interior -->
+      <circle cx="22" cy="21" r="8.5" stroke="#EDE9E0" stroke-width="0.9" opacity="0.2"/>
+      <!-- Lupa: círculo principal -->
+      <circle cx="19.5" cy="19" r="11" stroke="#EDE9E0" stroke-width="2.5" fill="none"/>
+      <!-- Lupa: mango (sale del pin hacia abajo-derecha) -->
+      <line x1="28" y1="27.5" x2="40" y2="41" stroke="#EDE9E0" stroke-width="3" stroke-linecap="round"/>
+      <!-- Corazón roto: mitad izquierda -->
+      <path d="M19.5 25 C17 23 13 20 13 16.5 C13 14 14.8 12.5 17 12.5 C18.3 12.5 19.2 13.2 19.5 14 L19.5 25Z" fill="#E0185C"/>
+      <!-- Corazón roto: mitad derecha -->
+      <path d="M20.5 25 C23 23 27 20 27 16.5 C27 14 25.2 12.5 23 12.5 C21.7 12.5 20.8 13.2 20.5 14 L20.5 25Z" fill="#E0185C"/>
+      <!-- Grieta del corazón -->
+      <polyline points="19.5,12.8 21.5,16.5 18.5,19 21,23 19.5,25" stroke="#1E2438" stroke-width="1.2" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+    </svg>
+    <div class="logo-text"><span class="infiel">Infielmap</span><span class="mapword" style="font-size:16px;opacity:0.6">.es</span></div>
+  </div>
+
+  <div class="total-counter">
+    <span>reportes registrados</span>
+    <span id="totalCounter">—</span>
+  </div>
+</header>
+
+<!-- ════════════════════════════════════════
+     AD BANNER 728×90
+════════════════════════════════════════ -->
+<div class="ad-banner">
+  <!-- AdSense placeholder — replace with real ad code -->
+  <div class="ad-inner-728">728 × 90</div>
+</div>
+
+<!-- ════════════════════════════════════════
+     MAIN LAYOUT
+════════════════════════════════════════ -->
+<div class="app-layout">
+
+  <!-- ── LEFT PANEL ── -->
+  <aside class="left-panel">
+
+    <!-- 1. Live alert -->
+    <div class="live-alert">
+      <div class="live-header">
+        <div class="pulse-dot"></div>
+        <span class="live-label">Ahora mismo</span>
+      </div>
+      <div id="liveAlertText">Cargando…</div>
+    </div>
+
+    <!-- 2. Notify button -->
+    <button id="notifyBtn">
+      <!-- Plus icon -->
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/>
+        <line x1="8" y1="4.5" x2="8" y2="11.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        <line x1="4.5" y1="8" x2="11.5" y2="8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
+      Notificar una infidelidad
+    </button>
+
+    <!-- 3. Stats grid -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <span class="stat-label">Hoy</span>
+        <span class="stat-value" id="statToday">—</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Esta semana</span>
+        <span class="stat-value" id="statWeek">—</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">♂</span>
+        <span class="stat-value" id="statMale">—</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">♀</span>
+        <span class="stat-value" id="statFemale">—</span>
+      </div>
+    </div>
+
+    <!-- 4. City ranking -->
+    <div class="section-title">Ciudades más activas</div>
+    <div class="ranking-list" id="rankingList"></div>
+
+    <!-- 5. Legend -->
+    <div class="section-title">Leyenda</div>
+    <div class="legend">
+      <div class="legend-item">
+        <div class="leg-line male"></div>
+        <span>♂ Hombre</span>
+      </div>
+      <div class="legend-item">
+        <div class="leg-line female"></div>
+        <span>♀ Mujer</span>
+      </div>
+      <div class="legend-item">
+        <div class="leg-line lgbtq"></div>
+        <span>🌈 LGBTQ+</span>
+      </div>
+    </div>
+
+    <!-- AdSense 300×250 -->
+    <div class="ad-rect-wrap" style="border-top:1px solid var(--border)">
+      <!-- AdSense placeholder — replace with real ad code -->
+      <div class="ad-inner-300">300 × 250</div>
+    </div>
+
+  </aside>
+
+  <!-- ── MAP ── -->
+  <div id="map"></div>
+
+</div>
+
+<!-- ════════════════════════════════════════
+     NOTIFY MODAL
+════════════════════════════════════════ -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <button class="modal-close" id="modalClose" aria-label="Cerrar">✕</button>
+
+    <!-- Modal logo — pin + lupa + corazón roto (grande) -->
+    <div class="modal-logo">
+      <svg width="56" height="68" viewBox="0 0 44 54" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M22 52 C22 52 2 36 2 21 C2 10.5 11 2 22 2 C33 2 42 10.5 42 21 C42 36 22 52 22 52Z"
+              fill="#1E2438" stroke="#EDE9E0" stroke-width="2.2"/>
+        <circle cx="22" cy="21" r="14" stroke="#EDE9E0" stroke-width="1" opacity="0.25"/>
+        <circle cx="22" cy="21" r="8.5" stroke="#EDE9E0" stroke-width="0.9" opacity="0.2"/>
+        <circle cx="19.5" cy="19" r="11" stroke="#EDE9E0" stroke-width="2.5" fill="none"/>
+        <line x1="28" y1="27.5" x2="40" y2="41" stroke="#EDE9E0" stroke-width="3" stroke-linecap="round"/>
+        <path d="M19.5 25 C17 23 13 20 13 16.5 C13 14 14.8 12.5 17 12.5 C18.3 12.5 19.2 13.2 19.5 14 L19.5 25Z" fill="#E0185C"/>
+        <path d="M20.5 25 C23 23 27 20 27 16.5 C27 14 25.2 12.5 23 12.5 C21.7 12.5 20.8 13.2 20.5 14 L20.5 25Z" fill="#E0185C"/>
+        <polyline points="19.5,12.8 21.5,16.5 18.5,19 21,23 19.5,25" stroke="#1E2438" stroke-width="1.2" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+      </svg>
+    </div>
+
+    <div class="modal-title">Reportar infidelidad</div>
+
+    <form id="notifyForm" novalidate>
+
+      <div class="form-group">
+        <label class="form-label">Género del infiel</label>
+        <div class="gender-grid">
+          <button type="button" class="gender-btn" data-gender="m"><span>♂</span>Hombre</button>
+          <button type="button" class="gender-btn" data-gender="f"><span>♀</span>Mujer</button>
+          <button type="button" class="gender-btn" data-gender="gm"><span>🌈</span>Gay</button>
+          <button type="button" class="gender-btn" data-gender="gf"><span>🌈</span>Lesbiana</button>
+        </div>
+        <div class="field-error" id="errGender">Selecciona el género</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="originCity">Ciudad de origen</label>
+        <select id="originCity"><option value="">— Selecciona ciudad —</option></select>
+        <div class="field-error" id="errOrigin">Selecciona la ciudad de origen</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="destCity">Ciudad de destino</label>
+        <select id="destCity"><option value="">— Selecciona ciudad —</option></select>
+        <div class="field-error" id="errDest">Selecciona la ciudad de destino</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="emailInput">Tu email</label>
+        <input type="email" id="emailInput" placeholder="tu@email.com" autocomplete="email"/>
+        <div class="field-error" id="errEmail">Introduce un email válido</div>
+      </div>
+
+      <button type="submit" class="submit-btn" id="submitBtn">Confirmar reporte</button>
+
+    </form>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast">Infidelidad registrada.</div>
+
+<!-- ════════════════════════════════════════
+     SCRIPTS
+════════════════════════════════════════ -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+'use strict';
+
+// ── CONFIG ──────────────────────────────────────────────────
+const SUPABASE_URL      = 'https://stmqmwwenctpbcnnduua.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN0bXFtd3dlbmN0cGJjbm5kdXVhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzOTkyOTYsImV4cCI6MjA5NTk3NTI5Nn0.Dqdq6N-oebiPwbV2G1AwtdTGKsPSkjVnsBI8Up_lsAE';
+
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ── CITIES ──────────────────────────────────────────────────
+const CITIES = [
+  // Madrid
+  {name:'Madrid',           lat:40.4168, lng:-3.7038},
+  {name:'Alcalá de Henares',lat:40.4818, lng:-3.3649},
+  {name:'Móstoles',         lat:40.3226, lng:-3.8647},
+  {name:'Leganés',          lat:40.3283, lng:-3.7649},
+  {name:'Fuenlabrada',      lat:40.2842, lng:-3.7949},
+  {name:'Getafe',           lat:40.3057, lng:-3.7333},
+  {name:'Alcorcón',         lat:40.3461, lng:-3.8233},
+  // Cataluña
+  {name:'Barcelona',            lat:41.3851, lng:2.1734},
+  {name:'Hospitalet de Llobregat',lat:41.3598,lng:2.1076},
+  {name:'Badalona',             lat:41.4500, lng:2.2472},
+  {name:'Sabadell',             lat:41.5433, lng:2.1091},
+  {name:'Terrassa',             lat:41.5628, lng:2.0089},
+  {name:'Girona',               lat:41.9794, lng:2.8214},
+  {name:'Lleida',               lat:41.6148, lng:0.6262},
+  {name:'Tarragona',            lat:41.1190, lng:1.2445},
+  {name:'Reus',                 lat:41.1559, lng:1.1065},
+  {name:'Mataró',               lat:41.5367, lng:2.4452},
+  {name:'Manresa',              lat:41.7288, lng:1.8282},
+  // Comunitat Valenciana
+  {name:'Valencia',      lat:39.4699, lng:-0.3763},
+  {name:'Alicante',      lat:38.3452, lng:-0.4810},
+  {name:'Elche',         lat:38.2699, lng:-0.7126},
+  {name:'Castellón',     lat:39.9864, lng:-0.0513},
+  {name:'Torrevieja',    lat:37.9784, lng:-0.6875},
+  {name:'Benidorm',      lat:38.5406, lng:-0.1300},
+  {name:'Gandia',        lat:38.9666, lng:-0.1833},
+  {name:'Torrent',       lat:39.4329, lng:-0.4669},
+  // Andalucía
+  {name:'Sevilla',                lat:37.3891, lng:-5.9845},
+  {name:'Málaga',                 lat:36.7213, lng:-4.4214},
+  {name:'Córdoba',                lat:37.8882, lng:-4.7794},
+  {name:'Granada',                lat:37.1773, lng:-3.5986},
+  {name:'Almería',                lat:36.8340, lng:-2.4637},
+  {name:'Huelva',                 lat:37.2614, lng:-6.9447},
+  {name:'Jaén',                   lat:37.7796, lng:-3.7849},
+  {name:'Cádiz',                  lat:36.5271, lng:-6.2886},
+  {name:'Jerez de la Frontera',   lat:36.6863, lng:-6.1362},
+  {name:'Algeciras',              lat:36.1304, lng:-5.4601},
+  {name:'Marbella',               lat:36.5101, lng:-4.8826},
+  {name:'Torremolinos',           lat:36.6222, lng:-4.4998},
+  {name:'Fuengirola',             lat:36.5396, lng:-4.6250},
+  {name:'Dos Hermanas',           lat:37.2827, lng:-5.9209},
+  {name:'Linares',                lat:38.0898, lng:-3.6366},
+  // Murcia
+  {name:'Murcia',    lat:37.9922, lng:-1.1307},
+  {name:'Cartagena', lat:37.6048, lng:-0.9863},
+  {name:'Lorca',     lat:37.6701, lng:-1.7003},
+  // Castilla-La Mancha
+  {name:'Albacete',    lat:38.9943, lng:-1.8585},
+  {name:'Ciudad Real', lat:38.9848, lng:-3.9274},
+  {name:'Cuenca',      lat:40.0704, lng:-2.1374},
+  {name:'Toledo',      lat:39.8628, lng:-4.0273},
+  {name:'Guadalajara', lat:40.6321, lng:-3.1664},
+  {name:'Talavera de la Reina',lat:39.9617,lng:-4.8312},
+  // Castilla y León
+  {name:'Valladolid', lat:41.6523, lng:-4.7245},
+  {name:'Burgos',     lat:42.3440, lng:-3.6969},
+  {name:'Salamanca',  lat:40.9701, lng:-5.6635},
+  {name:'León',       lat:42.5987, lng:-5.5671},
+  {name:'Zamora',     lat:41.5010, lng:-5.7456},
+  {name:'Ávila',      lat:40.6567, lng:-4.6816},
+  {name:'Segovia',    lat:40.9429, lng:-4.1088},
+  {name:'Palencia',   lat:42.0097, lng:-4.5288},
+  {name:'Soria',      lat:41.7640, lng:-2.4656},
+  // País Vasco
+  {name:'Bilbao',         lat:43.2630, lng:-2.9350},
+  {name:'Vitoria',        lat:42.8467, lng:-2.6716},
+  {name:'San Sebastián',  lat:43.3183, lng:-1.9812},
+  {name:'Barakaldo',      lat:43.2958, lng:-2.9959},
+  // Navarra / La Rioja
+  {name:'Pamplona', lat:42.8169, lng:-1.6432},
+  {name:'Logroño',  lat:42.4627, lng:-2.4449},
+  // Aragón
+  {name:'Zaragoza', lat:41.6488, lng:-0.8891},
+  {name:'Huesca',   lat:42.1401, lng:-0.4082},
+  {name:'Teruel',   lat:40.3456, lng:-1.1065},
+  // Galicia
+  {name:'A Coruña',             lat:43.3623, lng:-8.4115},
+  {name:'Vigo',                 lat:42.2406, lng:-8.7207},
+  {name:'Santiago de Compostela',lat:42.8782,lng:-8.5448},
+  {name:'Ourense',              lat:42.3359, lng:-7.8639},
+  {name:'Lugo',                 lat:43.0097, lng:-7.5567},
+  {name:'Pontevedra',           lat:42.4342, lng:-8.6481},
+  // Asturias / Cantabria
+  {name:'Oviedo',    lat:43.3614, lng:-5.8593},
+  {name:'Gijón',     lat:43.5453, lng:-5.6629},
+  {name:'Santander', lat:43.4623, lng:-3.8099},
+  // Extremadura
+  {name:'Badajoz', lat:38.8794, lng:-6.9706},
+  {name:'Cáceres', lat:39.4752, lng:-6.3723},
+  {name:'Mérida',  lat:38.9121, lng:-6.3494},
+  // Islas Baleares
+  {name:'Palma',    lat:39.5696, lng:2.6502},
+  {name:'Ibiza',    lat:38.9067, lng:1.4327},
+  {name:'Mahón',    lat:39.8894, lng:4.2630},
+  // Canarias
+  {name:'Las Palmas de Gran Canaria', lat:28.1235, lng:-15.4366},
+  {name:'Santa Cruz de Tenerife',     lat:28.4636, lng:-16.2518},
+  {name:'La Laguna',                  lat:28.4853, lng:-16.3167},
+  {name:'Arrecife',                   lat:28.9636, lng:-13.5476},
+  // Ceuta / Melilla
+  {name:'Ceuta',   lat:35.8894, lng:-5.3213},
+  {name:'Melilla', lat:35.2923, lng:-2.9381},
+];
+
+const CITY_MAP = {};
+CITIES.forEach(c => { CITY_MAP[c.name] = c; });
+
+// ── LIVE ALERT ───────────────────────────────────────────────
+const TEMPLATES = [
+  (o,d) => `Un pícaro de ${o} está teniendo un desliz en ${d}`,
+  (o,d) => `Un pícaro de ${o} está con su amante en ${d}`,
+  (o,d) => `Una pícara de ${o} está teniendo un desliz en ${d}`,
+  (o,d) => `Una pícara de ${o} está con su amante en ${d}`,
+];
+
+function rnd(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+function makeAlert() {
+  const tpl = rnd(TEMPLATES);
+  const c1  = rnd(CITIES).name;
+  let c2    = rnd(CITIES).name;
+  if (c2 === c1) c2 = rnd(CITIES).name;
+  return tpl(c1, c2);
+}
+
+function rotateLiveAlert() {
+  const el = document.getElementById('liveAlertText');
+  el.style.opacity = '0';
+  setTimeout(() => {
+    el.textContent = makeAlert();
+    el.style.opacity = '1';
+  }, 480);
+  setTimeout(rotateLiveAlert, 6000 + Math.random() * 4000);
+}
+
+// ── MAP ─────────────────────────────────────────────────────
+const map = L.map('map', { attributionControl: true })
+  .setView([40.4, -3.7], 6);
+
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
+  subdomains: 'abcd',
+  maxZoom: 19,
+}).addTo(map);
+
+// ── CITY DOTS ────────────────────────────────────────────────
+const _dotMarkers = {};
+
+function ensureDot(name) {
+  if (_dotMarkers[name]) return _dotMarkers[name];
+  const c = CITY_MAP[name];
+  if (!c) return null;
+  const m = L.marker([c.lat, c.lng], {
+    icon: L.divIcon({ html: '<div class="city-dot"></div>', className: '', iconSize: [7,7], iconAnchor: [3.5,3.5] }),
+    interactive: false,
+    zIndexOffset: -100,
+  }).addTo(map);
+  _dotMarkers[name] = m;
+  return m;
+}
+
+function pulseDot(name) {
+  const m = ensureDot(name);
+  if (!m) return;
+  const dot = m.getElement()?.querySelector('.city-dot');
+  if (!dot) return;
+  dot.classList.remove('pulse');
+  void dot.offsetWidth;
+  dot.classList.add('pulse');
+}
+
+// ── ARROWS ───────────────────────────────────────────────────
+function genderColor(g) {
+  if (g === 'm')  return '#3D7DB5';
+  if (g === 'f')  return '#E0185C';
+  return '#9B59B6'; // lgbtq — will also get rainbow CSS
+}
+
+function genderSym(g) {
+  if (g === 'm') return '♂';
+  if (g === 'f') return '♀';
+  return '🌈';
+}
+
+// Compute compass bearing so the arrowhead points the right way
+function bearing(from, to) {
+  const r = Math.PI / 180;
+  const φ1 = from.lat * r, φ2 = to.lat * r;
+  const Δλ = (to.lng - from.lng) * r;
+  const y = Math.sin(Δλ) * Math.cos(φ2);
+  const x = Math.cos(φ1)*Math.sin(φ2) - Math.sin(φ1)*Math.cos(φ2)*Math.cos(Δλ);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+
+function drawArrow(originName, destName, gender) {
+  const from = CITY_MAP[originName];
+  const to   = CITY_MAP[destName];
+  if (!from || !to || originName === destName) return;
+
+  const isLGBTQ = gender === 'gm' || gender === 'gf';
+  const color   = genderColor(gender);
+
+  // Polyline
+  const line = L.polyline([[from.lat, from.lng], [to.lat, to.lng]], {
+    color,
+    weight: 2,
+    opacity: 0,
+    className: isLGBTQ ? 'rainbow-arrow' : '',
+  }).addTo(map);
+
+  // Arrowhead + symbol
+  const angle = bearing(from, to);
+  const arrowHtml = `
+    <div style="position:relative;width:22px;height:22px;">
+      <div style="position:absolute;top:50%;left:50%;
+        transform:translate(-50%,-50%) rotate(${angle - 90}deg);
+        color:${color};font-size:14px;line-height:1;opacity:0.95">▶</div>
+      <div style="position:absolute;top:-14px;left:50%;
+        transform:translateX(-50%);font-size:11px;line-height:1;
+        color:${color};filter:drop-shadow(0 1px 3px rgba(0,0,0,.9))">${genderSym(gender)}</div>
+    </div>`;
+  const headMarker = L.marker([to.lat, to.lng], {
+    icon: L.divIcon({ html: arrowHtml, className: '', iconSize: [22,22], iconAnchor: [11,11] }),
+    interactive: false,
+    zIndexOffset: 10,
+  });
+
+  // Animate: draw path then show head, then fade
+  const pathEl = line.getElement();
+  if (!pathEl) { map.removeLayer(line); return; }
+
+  const len = pathEl.getTotalLength ? pathEl.getTotalLength() : 0;
+  if (len < 1) { map.removeLayer(line); return; }
+
+  pathEl.style.strokeDasharray  = `${len}`;
+  pathEl.style.strokeDashoffset = `${len}`;
+  pathEl.style.opacity = '0.9';
+
+  requestAnimationFrame(() => {
+    pathEl.style.transition = `stroke-dashoffset 2.4s ease-in-out`;
+    pathEl.style.strokeDashoffset = '0';
+
+    // Show arrowhead once line arrives
+    setTimeout(() => headMarker.addTo(map), 2500);
+
+    // Fade out after 8 s total
+    setTimeout(() => {
+      pathEl.style.transition = 'opacity 1.5s ease';
+      pathEl.style.opacity = '0';
+      const headEl = headMarker.getElement();
+      if (headEl) { headEl.style.transition = 'opacity 1.5s ease'; headEl.style.opacity = '0'; }
+      setTimeout(() => {
+        map.removeLayer(line);
+        if (map.hasLayer(headMarker)) map.removeLayer(headMarker);
+      }, 1600);
+    }, 6500);
+  });
+
+  pulseDot(originName);
+  pulseDot(destName);
+}
+
+// ── LOAD ARROWS ──────────────────────────────────────────────
+let _arrowPool = [];
+let _poolIdx   = 0;
+
+async function loadArrows() {
+  // Pre-populate dot markers for all cities
+  CITIES.forEach(c => ensureDot(c.name));
+
+  // Fetch last 48h
+  const since = new Date(Date.now() - 172800000).toISOString();
+  const { data: recent } = await sb.from('reports')
+    .select('origin_city,destination_city,gender')
+    .gte('created_at', since)
+    .order('created_at', { ascending: false })
+    .limit(60);
+
+  if (recent && recent.length) {
+    recent.forEach((r, i) => setTimeout(() => drawArrow(r.origin_city, r.destination_city, r.gender), i * 700));
+  }
+
+  // Cache a pool for the continuous loop
+  const { data: pool } = await sb.from('reports')
+    .select('origin_city,destination_city,gender')
+    .limit(400);
+  if (pool) _arrowPool = pool;
+
+  // Start continuous loop
+  const initialDelay = recent ? recent.length * 700 + 2000 : 2000;
+  setTimeout(loopArrow, initialDelay);
+}
+
+function loopArrow() {
+  if (_arrowPool.length) {
+    const r = _arrowPool[_poolIdx % _arrowPool.length];
+    _poolIdx++;
+    drawArrow(r.origin_city, r.destination_city, r.gender);
+  }
+  setTimeout(loopArrow, 5000 + Math.random() * 4000);
+}
+
+// ── STATS ────────────────────────────────────────────────────
+async function loadStats() {
+  const now  = new Date();
+  const todayISO = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+  const weekDate = new Date(now);
+  weekDate.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  weekDate.setHours(0, 0, 0, 0);
+  const weekISO = weekDate.toISOString();
+
+  const [totRes, todRes, wkRes, gnRes, cityRes] = await Promise.all([
+    sb.from('reports').select('*', { count: 'exact', head: true }),
+    sb.from('reports').select('*', { count: 'exact', head: true }).gte('created_at', todayISO),
+    sb.from('reports').select('*', { count: 'exact', head: true }).gte('created_at', weekISO),
+    sb.from('reports').select('gender'),
+    sb.from('reports').select('origin_city'),
+  ]);
+
+  // Total
+  const total = totRes.count || 0;
+  const counterEl = document.getElementById('totalCounter');
+  counterEl.textContent = total.toLocaleString('es-ES');
+
+  // Today / week
+  document.getElementById('statToday').textContent = (todRes.count || 0).toLocaleString('es-ES');
+  document.getElementById('statWeek').textContent  = (wkRes.count  || 0).toLocaleString('es-ES');
+
+  // Gender %
+  if (gnRes.data && gnRes.data.length > 0) {
+    const all = gnRes.data;
+    const n   = all.length;
+    const mPct = Math.round(all.filter(r => r.gender === 'm').length  / n * 100);
+    const fPct = Math.round(all.filter(r => r.gender === 'f').length  / n * 100);
+    document.getElementById('statMale').textContent   = mPct + '%';
+    document.getElementById('statFemale').textContent = fPct + '%';
+  }
+
+  // Ranking
+  if (cityRes.data && cityRes.data.length > 0) {
+    const counts = {};
+    cityRes.data.forEach(r => { counts[r.origin_city] = (counts[r.origin_city] || 0) + 1; });
+    const top5 = Object.entries(counts).sort((a,b) => b[1]-a[1]).slice(0, 5);
+    const max  = top5[0][1];
+    const list = document.getElementById('rankingList');
+    list.innerHTML = top5.map(([city, cnt]) => `
+      <div class="ranking-item">
+        <div class="ranking-row">
+          <span class="ranking-city">${city}</span>
+          <span class="ranking-count">${cnt}</span>
+        </div>
+        <div class="bar-bg"><div class="bar-fill" data-pct="${Math.round(cnt/max*100)}"></div></div>
+      </div>
+    `).join('');
+    requestAnimationFrame(() => {
+      document.querySelectorAll('.bar-fill').forEach(b => { b.style.width = b.dataset.pct + '%'; });
+    });
+  }
+
+  return total;
+}
+
+// ── MODAL ────────────────────────────────────────────────────
+let _gender = null;
+
+document.getElementById('notifyBtn').addEventListener('click', () => {
+  _gender = null;
+  document.querySelectorAll('.gender-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById('notifyForm').reset();
+  document.querySelectorAll('.field-error').forEach(e => e.style.display = 'none');
+  document.getElementById('modalOverlay').classList.add('active');
+});
+
+document.getElementById('modalClose').addEventListener('click', closeModal);
+document.getElementById('modalOverlay').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeModal();
+});
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('active');
+}
+
+document.querySelectorAll('.gender-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.gender-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    _gender = btn.dataset.gender;
+  });
+});
+
+// Populate dropdowns
+function populateCities() {
+  const sorted = [...CITIES].sort((a,b) => a.name.localeCompare(b.name,'es'));
+  const opts   = sorted.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+  const prefix = '<option value="">— Selecciona ciudad —</option>';
+  document.getElementById('originCity').innerHTML = prefix + opts;
+  document.getElementById('destCity').innerHTML   = prefix + opts;
+}
+
+// Form submit
+document.getElementById('notifyForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  document.querySelectorAll('.field-error').forEach(x => x.style.display = 'none');
+
+  let ok = true;
+  const show = id => { document.getElementById(id).style.display = 'block'; ok = false; };
+
+  if (!_gender)                                             show('errGender');
+  const origin = document.getElementById('originCity').value;
+  if (!origin)                                              show('errOrigin');
+  const dest = document.getElementById('destCity').value;
+  if (!dest)                                                show('errDest');
+  const email = document.getElementById('emailInput').value.trim();
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) show('errEmail');
+  if (!ok) return;
+
+  const btn = document.getElementById('submitBtn');
+  btn.disabled    = true;
+  btn.textContent = 'Enviando…';
+
+  const { error } = await sb.from('reports').insert({
+    gender:          _gender,
+    origin_city:     origin,
+    destination_city: dest,
+    is_celebrity:    false,
+    confirmed_count: 0,
+    is_confirmed:    false,
+  });
+
+  btn.disabled    = false;
+  btn.textContent = 'Confirmar reporte';
+
+  if (error) {
+    console.error('Supabase insert error:', error);
+    alert('Error al enviar el reporte. Por favor, inténtalo de nuevo.');
+    return;
+  }
+
+  closeModal();
+  drawArrow(origin, dest, _gender);
+
+  // Increment counters (no refetch needed)
+  const cEl = document.getElementById('totalCounter');
+  const n   = parseInt(cEl.textContent.replace(/\D/g,'')) || 0;
+  cEl.textContent = (n + 1).toLocaleString('es-ES');
+  cEl.classList.add('bump');
+  setTimeout(() => cEl.classList.remove('bump'), 600);
+
+  const todEl = document.getElementById('statToday');
+  todEl.textContent = ((parseInt(todEl.textContent) || 0) + 1).toLocaleString('es-ES');
+
+  showToast('Infidelidad registrada.');
+  _arrowPool.push({ origin_city: origin, destination_city: dest, gender: _gender });
+});
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3600);
+}
+
+// ── INIT ─────────────────────────────────────────────────────
+async function init() {
+  populateCities();
+
+  document.getElementById('liveAlertText').textContent = makeAlert();
+  rotateLiveAlert();
+
+  await Promise.all([loadStats(), loadArrows()]);
+}
+
+init().catch(err => console.error('Init error:', err));
+</script>
+</body>
+</html>
